@@ -20,12 +20,20 @@ export default function Home() {
         <TabsList>
           <TabsTrigger value="parser">Parser</TabsTrigger>
           <TabsTrigger value="editor">Editor</TabsTrigger>
+          <TabsTrigger value="preview">Preview</TabsTrigger>
+          <TabsTrigger value="bulk">Bulk Upload</TabsTrigger>
         </TabsList>
         <TabsContent value="parser">
           <ParserTab />
         </TabsContent>
         <TabsContent value="editor">
           <EditorTab />
+        </TabsContent>
+        <TabsContent value="preview">
+          <PreviewTab />
+        </TabsContent>
+        <TabsContent value="bulk">
+          <BulkUploadTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -337,6 +345,264 @@ function EditorTab() {
           value={JSON.stringify(JSON.stringify(grid))}
         />
       </div>
+    </div>
+  );
+}
+
+function PreviewTab() {
+  const [escapedJson, setEscapedJson] = useState("");
+  const [grid, setGrid] = useState<string[][] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<"_" | "#" | "$">("_");
+
+  const handlePreview = () => {
+    try {
+      const parsed = JSON.parse(JSON.parse(escapedJson));
+      if (!Array.isArray(parsed))
+        throw new Error("Parsed result is not a 2D array");
+      setGrid(parsed);
+      setError(null);
+    } catch (err) {
+      setError("Invalid escaped JSON");
+      setGrid(null);
+      console.error(err);
+    }
+  };
+
+  const updateCell = (x: number, y: number) => {
+    if (!grid) return;
+    const newGrid = [...grid.map((row) => [...row])];
+    newGrid[y][x] = activeTool;
+    setGrid(newGrid);
+    setEscapedJson(JSON.stringify(JSON.stringify(newGrid)));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">🧬 Paste Escaped JSON</h2>
+        <Textarea
+          value={escapedJson}
+          onChange={(e) => setEscapedJson(e.target.value)}
+          className="whitespace-pre h-40"
+        />
+        <Button className="mt-2" onClick={handlePreview}>
+          Show Grid
+        </Button>
+        {error && <p className="text-red-600 mt-2">{error}</p>}
+      </div>
+
+      {grid && (
+        <>
+          <div className="flex items-center gap-2">
+            Tool:
+            <Button
+              variant={activeTool === "_" ? "default" : "outline"}
+              onClick={() => setActiveTool("_")}
+            >
+              White (_)
+            </Button>
+            <Button
+              variant={activeTool === "#" ? "default" : "outline"}
+              onClick={() => setActiveTool("#")}
+            >
+              Gray (#)
+            </Button>
+            <Button
+              variant={activeTool === "$" ? "default" : "outline"}
+              onClick={() => setActiveTool("$")}
+            >
+              Yellow ($)
+            </Button>
+          </div>
+
+          <div className="mt-4">
+            <h2 className="text-lg font-semibold mb-2">📦 Editable Grid</h2>
+            <div className="inline-block border rounded overflow-hidden">
+              {grid.map((row, y) => (
+                <div key={y} className="flex">
+                  {row.map((cell, x) => (
+                    <div
+                      key={x}
+                      onClick={() => updateCell(x, y)}
+                      className={`w-6 h-6 border border-gray-400 text-xs flex items-center justify-center cursor-pointer select-none
+                        ${
+                          cell === "#"
+                            ? "bg-gray-400"
+                            : cell === "$"
+                            ? "bg-yellow-300"
+                            : "bg-white"
+                        }`}
+                    >
+                      {cell}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-lg font-semibold mt-4">
+              🧬 Escaped JSON Output
+            </h2>
+            <Textarea
+              className="whitespace-pre h-40"
+              value={escapedJson}
+              readOnly
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function BulkUploadTab() {
+  const [items, setItems] = useState<
+    {
+      file: File;
+      name: string;
+      width: number;
+      height: number;
+      grid: string[][];
+      escaped: string;
+    }[]
+  >([]);
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files) return;
+
+    const promises: Promise<{
+      file: File;
+      name: string;
+      width: number;
+      height: number;
+      grid: string[][];
+      escaped: string;
+    }>[] = [];
+
+    Array.from(files).forEach((file) => {
+      const match = file.name.match(/^(.+)-(\d+)x(\d+)\.png$/);
+      if (!match) return;
+
+      const [, name, wStr, hStr] = match;
+      const width = parseInt(wStr, 10);
+      const height = parseInt(hStr, 10);
+
+      const promise = new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+
+          ctx.drawImage(img, 0, 0);
+          const cellW = img.width / width;
+          const cellH = img.height / height;
+          const grid: string[][] = [];
+
+          for (let y = 0; y < height; y++) {
+            const row: string[] = [];
+            for (let x = 0; x < width; x++) {
+              const px = Math.floor(x * cellW + cellW / 2);
+              const py = Math.floor(y * cellH + cellH / 2);
+              const [r, g, b] = ctx.getImageData(px, py, 1, 1).data;
+              let char = "#";
+              if (r > 240 && g > 240 && b > 240) char = "_";
+              else if (r > 230 && g > 230 && b < 100) char = "$";
+              row.push(char);
+            }
+            grid.push(row);
+          }
+
+          resolve({
+            file,
+            name,
+            width,
+            height,
+            grid,
+            escaped: JSON.stringify(JSON.stringify(grid)),
+          });
+        };
+
+        img.src = URL.createObjectURL(file);
+      });
+
+      // @ts-expect-error ignoruju tohle
+      promises.push(promise);
+    });
+
+    Promise.all(promises).then((results) => {
+      setItems(results);
+    });
+  };
+
+  const updateGrid = (index: number, newGrid: string[][]) => {
+    const newItems = [...items];
+    newItems[index].grid = newGrid;
+    newItems[index].escaped = JSON.stringify(JSON.stringify(newGrid));
+    setItems(newItems);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Input
+          type="file"
+          accept="image/png"
+          multiple
+          onChange={(e) => handleFiles(e.target.files)}
+        />
+      </div>
+
+      {items.map((item, index) => (
+        <div
+          key={index}
+          className="border rounded p-4 shadow-sm space-y-2 bg-white"
+        >
+          <h3 className="text-lg font-semibold">{item.name}</h3>
+          <div className="inline-block border rounded overflow-hidden">
+            {item.grid.map((row, y) => (
+              <div key={y} className="flex">
+                {row.map((cell, x) => (
+                  <div
+                    key={x}
+                    onClick={() => {
+                      const next =
+                        cell === "_" ? "#" : cell === "#" ? "$" : "_";
+                      const newGrid = item.grid.map((r) => [...r]);
+                      newGrid[y][x] = next;
+                      updateGrid(index, newGrid);
+                    }}
+                    className={`w-6 h-6 border border-gray-400 text-xs flex items-center justify-center cursor-pointer select-none
+                      ${
+                        cell === "#"
+                          ? "bg-gray-400"
+                          : cell === "$"
+                          ? "bg-yellow-300"
+                          : "bg-white"
+                      }`}
+                  >
+                    {cell}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <h4 className="text-sm font-medium mt-2">🧬 Escaped JSON</h4>
+            <Textarea
+              className="whitespace-pre h-32 mt-1"
+              readOnly
+              value={item.escaped}
+            />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
