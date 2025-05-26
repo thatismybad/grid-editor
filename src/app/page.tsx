@@ -458,6 +458,15 @@ function PreviewTab() {
   );
 }
 
+interface ExportObject {
+  puzzleCategoryId: string;
+  name: string;
+  isEnabled: boolean;
+  shape: string;
+  width: number;
+  height: number;
+}
+
 function BulkUploadTab() {
   const [items, setItems] = useState<
     {
@@ -469,6 +478,22 @@ function BulkUploadTab() {
       escaped: string;
     }[]
   >([]);
+
+  const copyToClipboard = async (text: string) => {
+    await navigator.clipboard.writeText(text);
+  };
+
+  const downloadAsJson = (data: ExportObject[], filename = "output.json") => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
@@ -558,6 +583,43 @@ function BulkUploadTab() {
         />
       </div>
 
+      {items.length > 0 && (
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              const all: ExportObject[] = items.map((item) => ({
+                puzzleCategoryId: "b532d39f-fb40-4ea4-8d5f-6040dbeee7fd",
+                name: item.name,
+                isEnabled: true,
+                shape: item.escaped,
+                width: item.width,
+                height: item.height,
+              }));
+              copyToClipboard(JSON.stringify(all, null, 2));
+            }}
+          >
+            📋 Copy All as JSON
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const all = items.map((item) => ({
+                puzzleCategoryId: "b532d39f-fb40-4ea4-8d5f-6040dbeee7fd",
+                name: item.name,
+                isEnabled: true,
+                shape: item.escaped,
+                width: item.width,
+                height: item.height,
+              }));
+              downloadAsJson(all);
+            }}
+          >
+            💾 Download as JSON
+          </Button>
+        </div>
+      )}
+
       {items.map((item, index) => (
         <div
           key={index}
@@ -593,14 +655,17 @@ function BulkUploadTab() {
             ))}
           </div>
 
-          <div>
-            <h4 className="text-sm font-medium mt-2">🧬 Escaped JSON</h4>
-            <Textarea
-              className="whitespace-pre h-32 mt-1"
-              readOnly
-              value={item.escaped}
-            />
+          <div className="flex justify-between items-center mt-2">
+            <h4 className="text-sm font-medium">🧬 Escaped JSON</h4>
+            <Button size="sm" onClick={() => copyToClipboard(item.escaped)}>
+              Copy
+            </Button>
           </div>
+          <Textarea
+            className="whitespace-pre h-32 mt-1"
+            readOnly
+            value={item.escaped}
+          />
         </div>
       ))}
     </div>
