@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import ImageNext from "next/image";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<string>("parser");
@@ -37,14 +38,17 @@ function ParserTab() {
   const [escapedOutput, setEscapedOutput] = useState("");
   const [gridWidth, setGridWidth] = useState(19);
   const [gridHeight, setGridHeight] = useState(19);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
 
-  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleImage = (file: File) => {
     const img = new Image();
     img.onload = () => {
       const canvas = canvasRef.current;
@@ -93,25 +97,77 @@ function ParserTab() {
     <div className="space-y-4">
       <div className="space-y-2">
         <div className="flex flex-row gap-2">
+          <label className="flex flex-row gap-2 items-center">
+            Width:
+            <Input
+              type="number"
+              value={gridWidth}
+              onChange={(e) => setGridWidth(Number(e.target.value))}
+              placeholder="Grid width"
+              className="w-20"
+            />
+          </label>
+          <label className="flex flex-row gap-2 items-center">
+            Height:
+            <Input
+              type="number"
+              value={gridHeight}
+              onChange={(e) => setGridHeight(Number(e.target.value))}
+              placeholder="Grid height"
+              className="w-20"
+            />
+          </label>
           <Input
-            type="number"
-            value={gridWidth}
-            onChange={(e) => setGridWidth(Number(e.target.value))}
-            placeholder="Grid width"
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+
+              const objectUrl = URL.createObjectURL(file);
+              setUploadedFile(file);
+              setImagePreviewUrl(objectUrl);
+
+              const img = new window.Image();
+              img.onload = () => {
+                setImageDimensions({ width: img.width, height: img.height });
+              };
+              img.src = objectUrl;
+            }}
           />
-          <Input
-            type="number"
-            value={gridHeight}
-            onChange={(e) => setGridHeight(Number(e.target.value))}
-            placeholder="Grid height"
-          />
+          <Button
+            onClick={() => {
+              if (uploadedFile) handleImage(uploadedFile);
+              else alert("Please upload an image first.");
+            }}
+          >
+            Generate
+          </Button>
         </div>
-        <Input type="file" accept="image/*" onChange={handleImage} />
       </div>
 
       <canvas ref={canvasRef} className="hidden" />
 
       <div className="flex flex-row gap-2">
+        <div className="">
+          {imagePreviewUrl && imageDimensions && (
+            <div className="mt-4">
+              <p className="text-sm text-gray-500 mb-1">Image Preview:</p>
+              <ImageNext
+                width={imageDimensions?.width * 0.5}
+                height={imageDimensions?.height * 0.5}
+                src={imagePreviewUrl}
+                alt="Uploaded preview"
+                className="max-w-full h-auto border border-gray-300 rounded"
+              />
+              {/* <Image
+                src={imagePreviewUrl}
+                alt="Uploaded preview"
+                className=" h-auto border border-gray-300 rounded"
+              /> */}
+            </div>
+          )}
+        </div>
         <div className="flex-1">
           <div className="flex justify-between items-center mb-1">
             <h2 className="text-lg font-semibold">🖨️ Raw Output</h2>
@@ -121,8 +177,19 @@ function ParserTab() {
           </div>
           <Textarea
             className="whitespace-pre h-80"
-            readOnly
             value={rawOutput}
+            onChange={(e) => {
+              const newRaw = e.target.value;
+              setRawOutput(newRaw);
+
+              const grid = newRaw
+                .trim()
+                .split("\n")
+                .map((line) => line.split(""));
+
+              setJsonOutput(JSON.stringify(grid, null, 2));
+              setEscapedOutput(JSON.stringify(JSON.stringify(grid)));
+            }}
           />
         </div>
 
