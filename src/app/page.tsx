@@ -549,7 +549,7 @@ function BulkUploadTab() {
             width,
             height,
             grid,
-            escaped: JSON.stringify(JSON.stringify(grid)),
+            escaped: JSON.stringify(grid),
           });
         };
 
@@ -568,7 +568,7 @@ function BulkUploadTab() {
   const updateGrid = (index: number, newGrid: string[][]) => {
     const newItems = [...items];
     newItems[index].grid = newGrid;
-    newItems[index].escaped = JSON.stringify(JSON.stringify(newGrid));
+    newItems[index].escaped = JSON.stringify(newGrid);
     setItems(newItems);
   };
 
